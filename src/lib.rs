@@ -1,4 +1,4 @@
-use cargo_metadata::{Metadata, MetadataCommand, Target};
+use cargo_metadata::{Metadata, MetadataCommand, Package, Target};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::convert::TryInto;
 use std::fs::File;
@@ -118,21 +118,22 @@ impl Entry {
     }
 }
 
-pub(crate) fn metadata_entries(metadata: Metadata) -> Result<Vec<Entry>, Error> {
-    let members = metadata
-        .workspace_members
-        .into_iter()
-        .collect::<HashSet<_>>();
-
-    let root = metadata.workspace_root;
+fn workspace_packages(metadata: &Metadata) -> Vec<&Package> {
+    let members = metadata.workspace_members.iter().collect::<HashSet<_>>();
 
     // collect all packages, ordered by package id
     let packages = metadata
         .packages
-        .into_iter()
+        .iter()
         .filter(move |p| members.contains(&p.id))
         .map(|p| (p.id.clone(), p))
         .collect::<BTreeMap<_, _>>();
+
+    packages.values().copied().collect()
+}
+
+pub(crate) fn metadata_entries(metadata: Metadata) -> Result<Vec<Entry>, Error> {
+    let root = &metadata.workspace_root;
 
     // start with the root Cargo.toml
     let mut manifests = BTreeSet::<PathBuf>::new();
@@ -143,7 +144,8 @@ pub(crate) fn metadata_entries(metadata: Metadata) -> Result<Vec<Entry>, Error> 
         }
     }
 
-    for package in packages.values() {
+    let packages = workspace_packages(&metadata);
+    for package in &packages {
         manifests.insert(package.manifest_path.to_path_buf());
     }
 
@@ -152,8 +154,10 @@ pub(crate) fn metadata_entries(metadata: Metadata) -> Result<Vec<Entry>, Error> 
         entries.push(Entry::from_path(&root, manifest)?);
     }
 
-    for target in packages.into_iter().flat_map(|(_, p)| p.targets) {
-        entries.push(Entry::from_target(&root, target)?);
+    for package in packages {
+        for target in &package.targets {
+            entries.push(Entry::from_target(&root, target.clone())?);
+        }
     }
 
     Ok(entries)
@@ -191,20 +195,10 @@ pub fn unpack<R: Read + Seek>(source: R) -> Result<R, Error> {
 pub fn build<R: Read + Seek>(build_args: Vec<String>, source: R) -> Result<R, Error> {
     let source = unpack(source)?;
     let metadata = cargo_metadata::MetadataCommand::new().exec()?;
-    let packages = metadata
-        .workspace_members
+    let packages = workspace_packages(&metadata);
+    let clean_args = packages
         .into_iter()
-        .collect::<HashSet<_>>();
-    let package_names = metadata
-        .packages
-        .into_iter()
-        .filter_map(|p| {
-            if packages.contains(&p.id) {
-                Some(format!("--package={}", p.name))
-            } else {
-                None
-            }
-        })
+        .map(|p| format!("--package={}", p.name))
         .collect::<Vec<_>>();
 
     let status = Command::new("cargo")
@@ -217,7 +211,7 @@ pub fn build<R: Read + Seek>(build_args: Vec<String>, source: R) -> Result<R, Er
 
     let status = Command::new("cargo")
         .arg("clean")
-        .args(package_names)
+        .args(clean_args)
         .args(build_args)
         .status()?;
     if !status.success() {
