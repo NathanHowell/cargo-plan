@@ -7,9 +7,6 @@ jobs:
     name: Rust project
     runs-on: ubuntu-20.04
     steps:
-      - name: Install native dependencies
-        run: sudo apt-get install --no-install-suggests --no-install-recommends libgdal-dev
-
       - uses: actions/checkout@v2
 
       - uses: actions-rs/toolchain@v1
