@@ -1,4 +1,4 @@
-FROM rust:1-slim@sha256:b0b99a29bfa1a80a95051b7608ac44a0e4cbe20bdba466e43fd52492fb334eaf AS base
+FROM rust:1-slim-buster@sha256:b0b99a29bfa1a80a95051b7608ac44a0e4cbe20bdba466e43fd52492fb334eaf AS base
 WORKDIR app
 RUN cargo install --git https://github.com/NathanHowell/cargo-plan --branch master
 
@@ -12,5 +12,5 @@ RUN cargo plan build -- --release
 COPY . .
 RUN cargo build --release --bins
 
-FROM gcr.io/distroless/base@sha256:54ec1c780633580e1a0cf3c4a645643971cfc6e418b1d3e4c4df06b7fbc95f88
-COPY --from=builder /app/target/release release
+FROM debian:buster-slim@sha256:1be41347adaee8303bf12114b9edf4af0b35a5e1d9756b3ddad59856eaa31ea7
+COPY --from=builder /app/target/release app/
