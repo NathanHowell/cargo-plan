@@ -109,7 +109,9 @@ impl Entry {
             .as_slice()
         {
             ["bin"] => Entry::from_bytes(path, b"fn main() {}".to_vec()),
-            ["lib"] => Entry::from_bytes(path, b"".to_vec()),
+            ["lib"] | ["rlib"] | ["dylib"] | ["cdylib"] | ["staticlib"] | ["procmacro"] => {
+                Entry::from_bytes(path, b"".to_vec())
+            }
             crate_type => Err(Error::UnknownCrateTypeError {
                 name: target.name,
                 crate_type: crate_type.iter().map(|m| String::from(*m)).collect(),
@@ -175,8 +177,8 @@ pub fn generate<W: Write>(args: Vec<String>, write: W) -> Result<W, Error> {
 }
 
 pub fn unpack<R: Read + Seek>(source: R) -> Result<R, Error> {
-    let mut recipe = tar::Archive::new(source);
-    for entry in recipe.entries()? {
+    let mut archive = tar::Archive::new(source);
+    for entry in archive.entries()? {
         let entry = entry?;
         let path = entry.path()?;
         if path.exists() {
@@ -184,7 +186,7 @@ pub fn unpack<R: Read + Seek>(source: R) -> Result<R, Error> {
         }
     }
 
-    let mut reader = recipe.into_inner();
+    let mut reader = archive.into_inner();
     reader.seek(SeekFrom::Start(0))?;
     let mut recipe = tar::Archive::new(reader);
     recipe.unpack(".")?;
