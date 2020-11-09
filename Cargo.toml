@@ -1,0 +1,13 @@
+[package]
+name = "cargo-plan"
+version = "0.1.0"
+authors = ["Nathan Howell <nathan.d.howell@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+cargo_metadata = "0.12.0"
+clap = { version = "3.0.0-beta.2", default-features = false, features = ["cargo", "std", "suggestions"] }
+pathdiff = "0.2.0"
+tar = "0.4.30"
+tempfile = "3.1.0"
+thiserror = "1.0.22"
