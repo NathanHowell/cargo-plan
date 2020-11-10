@@ -1,35 +1,49 @@
 mod lib;
-use clap::{clap_app, crate_authors, crate_description, crate_name, crate_version};
+use clap::{crate_authors, crate_description, crate_name, crate_version, App, AppSettings, Arg};
 use std::error::Error;
 use std::fs::File;
 use std::io::{stdout, BufReader, BufWriter, Write};
 use std::{env, fs};
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let matches = clap_app!(myapp =>
-        (version: crate_version!())
-        (author: crate_authors!())
-        (name: crate_name!())
-        (about: crate_description!())
-        (bin_name: "cargo")
+fn app(name: &'static str) -> App {
+    App::new(name)
+        .version(crate_version!())
+        .author(crate_authors!())
+}
 
-        (@setting SubcommandRequiredElseHelp)
-        (@subcommand plan =>
-            (@setting SubcommandRequiredElseHelp)
-            (@subcommand create =>
-                (@arg PLAN: --plan +takes_value default_value("cargo-plan.tar"))
-                (@arg ARGS: +multiple +last)
-            )
-            (@subcommand build =>
-                (@arg PLAN: --plan +takes_value default_value("cargo-plan.tar"))
-                (@arg ARGS: +multiple +last)
-            )
-            (@subcommand "generate-dockerfile" =>
-                (@arg DEST: -f --file default_value("-"))
-            )
+fn main() -> Result<(), Box<dyn Error>> {
+    let plan_arg = Arg::new("PLAN")
+        .long("plan")
+        .takes_value(true)
+        .default_value("cargo-plan.tar");
+    let trailing_args = Arg::new("ARGS").multiple(true).last(true);
+    let matches = app(crate_name!())
+        .about(crate_description!())
+        .bin_name("cargo")
+        .setting(AppSettings::SubcommandRequiredElseHelp)
+        .subcommand(
+            app("plan")
+                .about(crate_description!())
+                .setting(AppSettings::SubcommandRequiredElseHelp)
+                .subcommand(
+                    app("create")
+                        .about("Create a build plan")
+                        .arg(&plan_arg)
+                        .arg(&trailing_args),
+                )
+                .subcommand(
+                    app("build")
+                        .about("Execute a build plan")
+                        .arg(plan_arg)
+                        .arg(trailing_args),
+                )
+                .subcommand(
+                    app("generate-dockerfile")
+                        .about("Generate a Dockerfile")
+                        .arg(Arg::new("DEST").short('f').long("file").default_value("-")),
+                ),
         )
-    )
-    .get_matches();
+        .get_matches();
 
     match matches.subcommand() {
         Some(("plan", plan)) => match plan.subcommand() {

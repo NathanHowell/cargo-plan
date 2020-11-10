@@ -1,9 +1,11 @@
 [package]
 name = "cargo-plan"
+description = "Build plans for Cargo!"
 version = "0.1.0"
 authors = ["Nathan Howell <nathan.d.howell@gmail.com>"]
 edition = "2018"
 license = "MIT"
+repository = "https://github.com/NathanHowell/cargo-plan"
 
 [dependencies]
 cargo_metadata = "0.12.0"
