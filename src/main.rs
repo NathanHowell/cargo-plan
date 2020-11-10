@@ -15,7 +15,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         (@subcommand plan =>
              (@arg PLAN: --plan +takes_value default_value("cargo-plan.tar"))
              (@setting SubcommandRequiredElseHelp)
-             (@subcommand generate =>
+             (@subcommand create =>
                  (@arg ARGS: +multiple +last)
              )
              (@subcommand build =>
