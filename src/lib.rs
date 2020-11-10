@@ -245,6 +245,7 @@ pub fn generate_dockerfile<W: Write>(mut destination: W) -> Result<(), Error> {
     let targets = packages
         .into_iter()
         .flat_map(|p| &p.targets)
+        .filter(|t| t.kind == vec!["bin"])
         .filter_map(|t| match crate_types(t).as_slice() {
             ["bin"] => Some(base_path.join(&t.name)),
             _ => None,
@@ -264,13 +265,15 @@ pub fn generate_dockerfile<W: Write>(mut destination: W) -> Result<(), Error> {
     let template = include_str!("../Dockerfile");
     let template = template.replace("COPY --from=builder /app/target/release ./", &targets);
     assert!(template.contains(&targets));
+    let template = template.replace("--branch master", concat!("--rev ", env!("VERGEN_SHA")));
+    assert!(template.contains(env!("VERGEN_SHA")));
 
     destination.write_all(template.as_bytes())?;
 
     if let Some(entrypoint) = entrypoint {
         if ambiguous {
             destination.write_all(
-                b"# NOTE: more than one binary target exists, this is an arbitrary entrypoint",
+                b"# NOTE: more than one binary target exists, this is an arbitrary entrypoint\n",
             )?;
         }
 
