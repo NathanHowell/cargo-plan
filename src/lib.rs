@@ -1,5 +1,5 @@
 use cargo_metadata::{Metadata, MetadataCommand, Package, Target};
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::convert::TryInto;
 use std::fs::File;
 use std::io;
@@ -149,26 +149,27 @@ fn workspace_packages(metadata: &Metadata) -> Vec<&Package> {
     packages.values().copied().collect()
 }
 
-pub(crate) fn metadata_entries(metadata: Metadata) -> Result<Vec<Entry>, Error> {
+fn metadata_entries(metadata: Metadata) -> Result<Vec<Entry>, Error> {
     let root = &metadata.workspace_root;
 
-    // start with the root Cargo.toml
-    let mut manifests = BTreeSet::<PathBuf>::new();
+    // start with the root Cargo.toml, this may optionally show up in workspace_packages too
+    // so we will dedupe with a set
+    let mut paths = HashSet::<PathBuf>::new();
     for path in &["./Cargo.toml", "./Cargo.lock"] {
         let path = root.join(path);
         if path.exists() {
-            manifests.insert(path);
+            paths.insert(path);
         }
     }
 
     let packages = workspace_packages(&metadata);
     for package in &packages {
-        manifests.insert(package.manifest_path.to_path_buf());
+        paths.insert(package.manifest_path.to_path_buf());
     }
 
     let mut entries = Vec::new();
-    for manifest in manifests {
-        entries.push(Entry::from_path(&root, manifest)?);
+    for path in paths {
+        entries.push(Entry::from_path(&root, path)?);
     }
 
     for package in packages {
@@ -177,10 +178,18 @@ pub(crate) fn metadata_entries(metadata: Metadata) -> Result<Vec<Entry>, Error> 
         }
     }
 
+    // sort entries so we have a deterministic output tar file
+    entries.sort_by_cached_key(|e| {
+        e.header
+            .path()
+            .expect("all entries to have a path")
+            .to_path_buf()
+    });
+
     Ok(entries)
 }
 
-pub fn generate<W: Write>(args: Vec<String>, write: W) -> Result<W, Error> {
+pub fn create<W: Write>(args: Vec<String>, write: W) -> Result<W, Error> {
     let metadata = MetadataCommand::new().other_options(args).exec()?;
     let mut archive = tar::Builder::new(write);
     for entry in metadata_entries(metadata)? {
@@ -238,12 +247,35 @@ pub fn build<R: Read + Seek>(build_args: Vec<String>, source: R) -> Result<R, Er
     Ok(source)
 }
 
-pub fn generate_dockerfile<W: Write>(mut destination: W) -> Result<(), Error> {
-    let metadata = MetadataCommand::new().exec()?;
-    let packages = workspace_packages(&metadata);
+fn expand_template<'a>(template: &'a str, install: &'a str, copy: &'a str) -> String {
+    let mut output = Vec::new();
+    let mut f: Box<dyn Fn(&'a str) -> &'a str> = Box::new(|i| i);
+    for line in template.lines() {
+        if line.starts_with("### __BEGIN_install") {
+            f = Box::new(|_| install);
+        } else if line.starts_with("### __BEGIN_copy") {
+            f = Box::new(|_| copy);
+        } else if line.starts_with("### __END") {
+            f = Box::new(|i| i);
+        } else {
+            output.push(f(line));
+        }
+    }
+
+    output.join("\n") + "\n"
+}
+
+fn install_cmd() -> &'static str {
+    concat!(
+        "RUN cargo install --git https://github.com/NathanHowell/cargo-plan --rev ",
+        env!("VERGEN_SHA"),
+    )
+}
+
+fn copy_cmd(packages: &[&Package]) -> String {
     let base_path = PathBuf::from("/app/target/release");
     let targets = packages
-        .into_iter()
+        .iter()
         .flat_map(|p| &p.targets)
         .filter(|t| t.kind == vec!["bin"])
         .filter_map(|t| match crate_types(t).as_slice() {
@@ -262,31 +294,36 @@ pub fn generate_dockerfile<W: Write>(mut destination: W) -> Result<(), Error> {
             .join(", ")
     );
 
-    let template = include_str!("../Dockerfile");
-    let template = template.replace("COPY --from=builder /app/target/release ./", &targets);
-    assert!(template.contains(&targets));
-    let template = template.replace("--branch master", concat!("--rev ", env!("VERGEN_SHA")));
-    assert!(template.contains(env!("VERGEN_SHA")));
-
-    destination.write_all(template.as_bytes())?;
-
+    let mut output = vec![targets];
     if let Some(entrypoint) = entrypoint {
         if ambiguous {
-            destination.write_all(
-                b"# NOTE: more than one binary target exists, this is an arbitrary entrypoint\n",
-            )?;
+            output.push(
+                "# NOTE: more than one binary target exists, this is an arbitrary entrypoint"
+                    .into(),
+            );
         }
 
-        destination.write_all(b"ENTRYPOINT [\"/app/")?;
-        destination.write_all(
-            entrypoint
-                .file_name()
-                .expect("binary targets are files")
-                .to_string_lossy()
-                .as_bytes(),
-        )?;
-        destination.write_all(b"\"]\n")?;
+        let entrypoint = entrypoint
+            .file_name()
+            .expect("binary targets are files")
+            .to_string_lossy();
+        output.push(format!("ENTRYPOINT [\"/app/{}\"]", entrypoint));
     }
+
+    output.join("\n")
+}
+
+pub fn generate_dockerfile<W: Write>(mut destination: W) -> Result<(), Error> {
+    let metadata = MetadataCommand::new().exec()?;
+    let packages = workspace_packages(&metadata);
+
+    let template = expand_template(
+        include_str!("../Dockerfile"),
+        install_cmd(),
+        copy_cmd(packages.as_slice()).as_str(),
+    );
+
+    destination.write_all(template.as_bytes())?;
 
     Ok(())
 }

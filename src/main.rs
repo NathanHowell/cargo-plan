@@ -33,13 +33,13 @@ fn main() -> Result<(), Box<dyn Error>> {
             let plan_path = plan.value_of("PLAN").unwrap();
 
             match plan.subcommand() {
-                Some(("generate", args)) => {
+                Some(("create", args)) => {
                     let temp_dir = tempfile::TempDir::new()?;
                     let temp_file = temp_dir.path().join("plan.tar");
                     let archive = File::create(&temp_file)?;
                     let archive = BufWriter::new(archive);
                     let plan =
-                        lib::generate(args.values_of_lossy("ARGS").unwrap_or_default(), archive)?;
+                        lib::create(args.values_of_lossy("ARGS").unwrap_or_default(), archive)?;
                     drop(plan);
                     fs::rename(&temp_file, plan_path)?;
                 }
