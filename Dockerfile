@@ -4,13 +4,14 @@ RUN cargo install --git https://github.com/NathanHowell/cargo-plan --branch mast
 
 FROM base AS planner
 COPY . .
-RUN cargo plan generate -- --all-features
+RUN cargo plan generate -- --all-features --locked
 
 FROM base AS builder
 COPY --from=planner /app/cargo-plan.tar cargo-plan.tar
-RUN cargo plan build -- --release
+RUN cargo plan build -- --release --frozen
 COPY . .
-RUN cargo build --release --bins
+RUN cargo build --release --bins --frozen
 
 FROM debian:buster-slim@sha256:1be41347adaee8303bf12114b9edf4af0b35a5e1d9756b3ddad59856eaa31ea7
-COPY --from=builder /app/target/release app/
+WORKDIR app
+COPY --from=builder /app/target/release ./

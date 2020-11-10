@@ -3,7 +3,7 @@ use clap::{clap_app, crate_authors, crate_description, crate_name, crate_version
 use std::error::Error;
 use std::fs;
 use std::fs::File;
-use std::io::{BufReader, BufWriter};
+use std::io::{stdout, BufReader, BufWriter, Write};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let matches = clap_app!(myapp =>
@@ -20,6 +20,9 @@ fn main() -> Result<(), Box<dyn Error>> {
              )
              (@subcommand build =>
                  (@arg ARGS: +multiple +last)
+             )
+             (@subcommand "generate-dockerfile" =>
+                 (@arg DEST: -f --file default_value("-"))
              )
         )
     )
@@ -44,6 +47,15 @@ fn main() -> Result<(), Box<dyn Error>> {
                     let archive = File::open(plan_path)?;
                     let archive = BufReader::new(archive);
                     lib::build(args.values_of_lossy("ARGS").unwrap_or_default(), archive)?;
+                }
+                Some(("generate-dockerfile", args)) => {
+                    let dest = args.value_of("DEST").unwrap();
+                    let archive = match dest {
+                        "-" => Ok(Box::new(stdout()) as Box<dyn Write>),
+                        _ => File::open(dest).map(|f| Box::new(f) as Box<dyn Write>),
+                    }?;
+                    let archive = BufWriter::new(archive);
+                    lib::generate_dockerfile(archive)?;
                 }
                 _ => panic!(),
             }

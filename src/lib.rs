@@ -100,24 +100,39 @@ impl Entry {
         target: T,
     ) -> Result<Self, Error> {
         let target = target.into();
-        let path = diff_path(target.src_path, base_path)?;
-        match target
-            .crate_types
-            .iter()
-            .map(|p| p.as_str())
-            .collect::<Vec<_>>()
-            .as_slice()
-        {
+        let path = diff_path(&target.src_path, base_path)?;
+        let name = target.name.clone();
+        match crate_types(&target).as_slice() {
             ["bin"] => Entry::from_bytes(path, b"fn main() {}".to_vec()),
             ["lib"] | ["rlib"] | ["dylib"] | ["cdylib"] | ["staticlib"] | ["procmacro"] => {
                 Entry::from_bytes(path, b"".to_vec())
             }
             crate_type => Err(Error::UnknownCrateTypeError {
-                name: target.name,
+                name,
                 crate_type: crate_type.iter().map(|m| String::from(*m)).collect(),
             }),
         }
     }
+}
+
+struct CrateTypes<'a> {
+    types: Vec<&'a str>,
+}
+
+impl<'a> CrateTypes<'a> {
+    fn as_slice(&self) -> &[&'a str] {
+        self.types.as_slice()
+    }
+}
+
+fn crate_types(target: &Target) -> CrateTypes {
+    let types = target
+        .crate_types
+        .iter()
+        .map(|p| p.as_str())
+        .collect::<Vec<_>>();
+
+    CrateTypes { types }
 }
 
 fn workspace_packages(metadata: &Metadata) -> Vec<&Package> {
@@ -221,4 +236,54 @@ pub fn build<R: Read + Seek>(build_args: Vec<String>, source: R) -> Result<R, Er
     }
 
     Ok(source)
+}
+
+pub fn generate_dockerfile<W: Write>(mut destination: W) -> Result<(), Error> {
+    let metadata = MetadataCommand::new().exec()?;
+    let packages = workspace_packages(&metadata);
+    let base_path = PathBuf::from("/app/target/release");
+    let targets = packages
+        .into_iter()
+        .flat_map(|p| &p.targets)
+        .filter_map(|t| match crate_types(t).as_slice() {
+            ["bin"] => Some(base_path.join(&t.name)),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let entrypoint = targets.get(0);
+    let ambiguous = targets.len() > 1;
+    let targets = format!(
+        "COPY --from=builder [{}, \"./\"]",
+        targets
+            .iter()
+            .map(|t| format!("\"{}\"", t.to_string_lossy()))
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+
+    let template = include_str!("../Dockerfile");
+    let template = template.replace("COPY --from=builder /app/target/release ./", &targets);
+    assert!(template.contains(&targets));
+
+    destination.write_all(template.as_bytes())?;
+
+    if let Some(entrypoint) = entrypoint {
+        if ambiguous {
+            destination.write_all(
+                b"# NOTE: more than one binary target exists, this is an arbitrary entrypoint",
+            )?;
+        }
+
+        destination.write_all(b"ENTRYPOINT [\"/app/")?;
+        destination.write_all(
+            entrypoint
+                .file_name()
+                .expect("binary targets are files")
+                .to_string_lossy()
+                .as_bytes(),
+        )?;
+        destination.write_all(b"\"]\n")?;
+    }
+
+    Ok(())
 }
