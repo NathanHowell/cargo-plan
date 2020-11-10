@@ -189,8 +189,15 @@ fn metadata_entries(metadata: Metadata) -> Result<Vec<Entry>, Error> {
     Ok(entries)
 }
 
-pub fn create<W: Write>(args: Vec<String>, write: W) -> Result<W, Error> {
-    let metadata = MetadataCommand::new().other_options(args).exec()?;
+pub fn create<P: Into<PathBuf>, W: Write>(
+    path: P,
+    args: Vec<String>,
+    write: W,
+) -> Result<W, Error> {
+    let metadata = MetadataCommand::new()
+        .other_options(args)
+        .current_dir(path)
+        .exec()?;
     let mut archive = tar::Builder::new(write);
     for entry in metadata_entries(metadata)? {
         archive.append(&entry.header, Cursor::new(entry.data))?;
@@ -218,9 +225,16 @@ pub fn unpack<R: Read + Seek>(source: R) -> Result<R, Error> {
     Ok(recipe.into_inner())
 }
 
-pub fn build<R: Read + Seek>(build_args: Vec<String>, source: R) -> Result<R, Error> {
+pub fn build<P: Into<PathBuf>, R: Read + Seek>(
+    path: P,
+    args: Vec<String>,
+    source: R,
+) -> Result<R, Error> {
+    let path = path.into();
     let source = unpack(source)?;
-    let metadata = cargo_metadata::MetadataCommand::new().exec()?;
+    let metadata = cargo_metadata::MetadataCommand::new()
+        .current_dir(path.clone())
+        .exec()?;
     let packages = workspace_packages(&metadata);
     let clean_args = packages
         .into_iter()
@@ -228,17 +242,19 @@ pub fn build<R: Read + Seek>(build_args: Vec<String>, source: R) -> Result<R, Er
         .collect::<Vec<_>>();
 
     let status = Command::new("cargo")
+        .current_dir(path.clone())
         .arg("build")
-        .args(&build_args)
+        .args(&args)
         .status()?;
     if !status.success() {
         std::process::exit(status.code().unwrap_or(1));
     }
 
     let status = Command::new("cargo")
+        .current_dir(path)
         .arg("clean")
         .args(clean_args)
-        .args(build_args)
+        .args(args)
         .status()?;
     if !status.success() {
         std::process::exit(status.code().unwrap_or(1));
@@ -313,8 +329,11 @@ fn copy_cmd(packages: &[&Package]) -> String {
     output.join("\n")
 }
 
-pub fn generate_dockerfile<W: Write>(mut destination: W) -> Result<(), Error> {
-    let metadata = MetadataCommand::new().exec()?;
+pub fn generate_dockerfile<P: Into<PathBuf>, W: Write>(
+    path: P,
+    mut destination: W,
+) -> Result<(), Error> {
+    let metadata = MetadataCommand::new().current_dir(path).exec()?;
     let packages = workspace_packages(&metadata);
 
     let template = expand_template(
