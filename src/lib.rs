@@ -1,33 +1,55 @@
 use cargo_metadata::{Metadata, MetadataCommand, Package, Target};
 use std::collections::{BTreeMap, HashSet};
 use std::convert::TryInto;
+use std::fmt::{self, Display, Formatter};
 use std::fs::File;
-use std::io;
-use std::io::{Cursor, Read, Seek, SeekFrom, Write};
+use std::io::{self, Cursor, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use tar::Header;
 
-#[derive(thiserror::Error, Debug)]
+#[derive(Debug)]
 pub enum Error {
-    #[error("File {0:?} already exists, please rerun in an empty directory")]
     FileExistsError(PathBuf),
 
-    #[error("Unknown crate type {crate_type:?} in {name}")]
     UnknownCrateTypeError {
         crate_type: Vec<String>,
         name: String,
     },
 
-    #[error("Failure calculating relative path between {path} and {base}")]
-    RelativePathError { path: PathBuf, base: PathBuf },
+    RelativePathError {
+        path: PathBuf,
+        base: PathBuf,
+    },
 
-    #[error(transparent)]
     IoError(io::Error),
 
-    #[error(transparent)]
     MetadataError(cargo_metadata::Error),
 }
+
+impl Display for Error {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Error::FileExistsError(path) => write!(
+                f,
+                "File {0:?} already exists, please rerun in an empty directory",
+                path
+            ),
+            Error::UnknownCrateTypeError { crate_type, name } => {
+                write!(f, "Unknown crate type {0:?} in {1}", crate_type, name)
+            }
+            Error::RelativePathError { path, base } => write!(
+                f,
+                "Failure calculating relative path between {0:?} and {1:?}",
+                path, base
+            ),
+            Error::IoError(e) => e.fmt(f),
+            Error::MetadataError(e) => e.fmt(f),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
 
 impl From<io::Error> for Error {
     fn from(e: io::Error) -> Self {

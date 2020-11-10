@@ -11,7 +11,6 @@ clap = { version = "3.0.0-beta.2", default-features = false, features = ["cargo"
 pathdiff = "0.2.0"
 tar = "0.4.30"
 tempfile = "3.1.0"
-thiserror = "1.0.22"
 
 [build-dependencies]
 vergen = "3.1.0"
