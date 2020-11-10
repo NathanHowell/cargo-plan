@@ -11,9 +11,10 @@ fn app(name: &'static str) -> App {
         .author(crate_authors!())
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn run_app() -> Result<(), Box<dyn Error>> {
     let plan_arg = Arg::new("PLAN")
-        .long("plan")
+        .short('f')
+        .long("file")
         .takes_value(true)
         .default_value("cargo-plan.tar");
     let trailing_args = Arg::new("ARGS").multiple(true).last(true);
@@ -86,4 +87,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     Ok(())
+}
+
+fn main() {
+    std::process::exit(match run_app() {
+        Ok(_) => 0,
+        Err(err) => {
+            eprintln!("error: {}", err);
+            1
+        }
+    })
 }

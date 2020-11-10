@@ -32,7 +32,7 @@ impl Display for Error {
         match self {
             Error::FileExistsError(path) => write!(
                 f,
-                "File {0:?} already exists, please rerun in an empty directory",
+                "The file {0:?} already exists, please rerun in an empty directory",
                 path
             ),
             Error::UnknownCrateTypeError { crate_type, name } => {
