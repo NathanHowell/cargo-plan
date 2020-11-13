@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::convert::TryInto;
 use std::fmt::{self, Display, Formatter};
 use std::fs::File;
+use std::hash::Hash;
 use std::io::{self, Cursor, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -85,6 +86,11 @@ fn diff_path<P: AsRef<Path>, B: AsRef<Path>>(path: P, base: B) -> Result<PathBuf
 }
 
 impl Entry {
+    const LIB_TYPES: &'static [&'static str] =
+        &["lib", "rlib", "dylib", "cdylib", "staticlib", "proc-macro"];
+
+    const BIN_TYPE: &'static str = "bin";
+
     fn from_path<B: AsRef<Path>, P: Into<PathBuf>>(base_path: B, path: P) -> Result<Self, Error> {
         let path = path.into();
         let data = std::fs::File::open(&path)?;
@@ -124,37 +130,32 @@ impl Entry {
         let target = target.into();
         let path = diff_path(&target.src_path, base_path)?;
         let name = target.name.clone();
-        match crate_types(&target).as_slice() {
-            ["bin"] => Entry::from_bytes(path, b"fn main() {}".to_vec()),
-            ["lib"] | ["rlib"] | ["dylib"] | ["cdylib"] | ["staticlib"] | ["procmacro"] => {
-                Entry::from_bytes(path, b"".to_vec())
-            }
-            crate_type => Err(Error::UnknownCrateTypeError {
+        let types = target
+            .crate_types
+            .iter()
+            .map(|k| k.as_str())
+            .collect::<HashSet<&str>>();
+        if types.contains(Self::BIN_TYPE) {
+            Entry::from_bytes(path, b"fn main() {}".to_vec())
+        } else if types.contains_any(Self::LIB_TYPES) {
+            Entry::from_bytes(path, b"".to_vec())
+        } else {
+            Err(Error::UnknownCrateTypeError {
                 name,
-                crate_type: crate_type.iter().map(|m| String::from(*m)).collect(),
-            }),
+                crate_type: target.crate_types,
+            })
         }
     }
 }
 
-struct CrateTypes<'a> {
-    types: Vec<&'a str>,
+trait ContainsAny<T> {
+    fn contains_any(&self, slice: &[T]) -> bool;
 }
 
-impl<'a> CrateTypes<'a> {
-    fn as_slice(&self) -> &[&'a str] {
-        self.types.as_slice()
+impl<T: Eq + Hash> ContainsAny<T> for HashSet<T> {
+    fn contains_any(&self, slice: &[T]) -> bool {
+        slice.iter().any(|e| self.contains(e))
     }
-}
-
-fn crate_types(target: &Target) -> CrateTypes {
-    let types = target
-        .crate_types
-        .iter()
-        .map(|p| p.as_str())
-        .collect::<Vec<_>>();
-
-    CrateTypes { types }
 }
 
 fn workspace_packages(metadata: &Metadata) -> Vec<&Package> {
@@ -315,10 +316,12 @@ fn copy_cmd(packages: &[&Package]) -> String {
     let targets = packages
         .iter()
         .flat_map(|p| &p.targets)
-        .filter(|t| t.kind == vec!["bin"])
-        .filter_map(|t| match crate_types(t).as_slice() {
-            ["bin"] => Some(base_path.join(&t.name)),
-            _ => None,
+        .filter_map(|t| {
+            if t.crate_types.contains(&"bin".to_string()) {
+                Some(base_path.join(&t.name))
+            } else {
+                None
+            }
         })
         .collect::<Vec<_>>();
     let entrypoint = targets.get(0);
