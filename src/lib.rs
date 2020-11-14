@@ -1,6 +1,7 @@
-use cargo_metadata::{Metadata, MetadataCommand, Package, Target};
-use std::collections::{BTreeMap, HashSet};
+use cargo_metadata::{Metadata, MetadataCommand, Package, PackageId, Target};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::convert::TryInto;
+use std::env;
 use std::fmt::{self, Display, Formatter};
 use std::fs::File;
 use std::hash::Hash;
@@ -230,22 +231,54 @@ pub fn create<P: Into<PathBuf>, W: Write>(
     Ok(destination)
 }
 
-pub fn unpack<R: Read + Seek>(source: R) -> Result<R, Error> {
+pub fn unpack<P: Into<PathBuf>, R: Read + Seek>(dir: P, source: R) -> Result<R, Error> {
+    let dir = dir.into();
     let mut archive = tar::Archive::new(source);
     for entry in archive.entries()? {
         let entry = entry?;
-        let path = entry.path()?;
+        let path = dir.join(entry.path()?);
         if path.exists() {
-            return Err(Error::FileExistsError(path.to_path_buf()));
+            return Err(Error::FileExistsError(path));
         }
     }
 
     let mut reader = archive.into_inner();
     reader.seek(SeekFrom::Start(0))?;
     let mut recipe = tar::Archive::new(reader);
-    recipe.unpack(".")?;
+    recipe.unpack(dir)?;
 
     Ok(recipe.into_inner())
+}
+
+fn packages_to_build(metadata: &Metadata, workspace_relative_path: &Path) -> Vec<String> {
+    // build up a lookup table for dependencies
+    let resolved = metadata
+        .resolve
+        .iter()
+        .flat_map(|x| &x.nodes)
+        .map(|x| (&x.id, &x.dependencies))
+        .collect::<HashMap<_, _>>();
+
+    // run a BFS over the dependency graph starting with our local packages
+    let mut queue = metadata
+        .packages
+        .iter()
+        .filter(|p| p.manifest_path.starts_with(workspace_relative_path))
+        .map(|p| p.id.clone())
+        .collect::<Vec<_>>();
+
+    let mut flattened_deps = BTreeSet::<PackageId>::new();
+    while let Some(package) = queue.pop() {
+        if flattened_deps.insert(package.clone()) {
+            queue.extend_from_slice(resolved.get(&package).unwrap().as_slice());
+        }
+    }
+
+    flattened_deps
+        .into_iter()
+        .map(|pid| &metadata[&pid])
+        .map(|pkg| format!("--package={}:{}", pkg.name, pkg.version))
+        .collect::<Vec<_>>()
 }
 
 pub fn build<P: Into<PathBuf>, R: Read + Seek>(
@@ -254,27 +287,71 @@ pub fn build<P: Into<PathBuf>, R: Read + Seek>(
     source: R,
 ) -> Result<R, Error> {
     let path = path.into();
-    let source = unpack(source)?;
+    let path = path.canonicalize()?;
+
+    // if this is being run in an existing workspace we need to capture the target directory
+    // and propagate this to other commands via environment variable
+    let (target_dir, workspace_root) = cargo_metadata::MetadataCommand::new()
+        .exec()
+        .map(|metadata| (metadata.target_directory, metadata.workspace_root))
+        .ok()
+        .map_or((None, None), |(x, y)| (Some(x), Some(y)));
+
+    let source = unpack(path.clone(), source)?;
     let metadata = cargo_metadata::MetadataCommand::new()
         .current_dir(path.clone())
         .exec()?;
-    let packages = workspace_packages(&metadata);
-    let clean_args = packages
-        .into_iter()
-        .map(|p| format!("--package={}", p.name))
-        .collect::<Vec<_>>();
+
+    // check to see if the user has overridden the CARGO_TARGET_DIR environment variable
+    // or set the build.target-dir config somewhere, if not we will need to do this
+    let current_dir = env::current_dir()?;
+    let target_dir = if let Some(target_dir) = target_dir {
+        target_dir
+    } else if let Ok(suffix) = metadata.target_directory.strip_prefix(&path) {
+        current_dir.join(suffix)
+    } else {
+        current_dir.join("target")
+    };
+    env::set_var("CARGO_TARGET_DIR", target_dir.as_os_str());
+
+    // also propagate the relative path to `cargo build`
+    let workspace_relative_path = workspace_root
+        .iter()
+        .flat_map(|w| current_dir.strip_prefix(w))
+        .map(|w| path.join(w))
+        .next()
+        .unwrap_or_else(|| path.clone());
+
+    // TODO: figure out why this builds packages it shouldn't
+    // e.g. `cargo build --package redox_syscall:0.1.57` fails with:
+    // error[E0554]: `#![feature]` may not be used on the stable release channel
+    // let build_args = packages_to_build(&metadata, &workspace_relative_path);
 
     let status = Command::new("cargo")
-        .current_dir(path.clone())
+        .current_dir(&workspace_relative_path)
+        .envs(env::vars())
         .arg("build")
         .args(&args)
+        // .args(build_args)
         .status()?;
     if !status.success() {
         std::process::exit(status.code().unwrap_or(1));
     }
 
+    let packages = workspace_packages(&metadata);
+
+    let clean_args = packages
+        .into_iter()
+        .filter(|p| p.manifest_path.starts_with(&workspace_relative_path))
+        .map(|p| format!("--package={}", p.name))
+        .collect::<Vec<_>>();
+
+    // we should always have at least one package to clean
+    assert!(!clean_args.is_empty());
+
     let status = Command::new("cargo")
         .current_dir(path)
+        .envs(env::vars())
         .arg("clean")
         .args(clean_args)
         .args(args)

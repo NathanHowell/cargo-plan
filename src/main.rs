@@ -67,10 +67,12 @@ fn run_app() -> Result<(), Box<dyn Error>> {
             }
             Some(("build", args)) => {
                 let plan_path = args.value_of("PLAN").unwrap();
-                let archive = File::open(plan_path)?;
+                let archive = File::open(plan_path)
+                    .map_err(|e| format!("Failed to open {}: {}", plan_path, e))?;
                 let archive = BufReader::new(archive);
+                let working_directory = tempfile::TempDir::new()?;
                 lib::build(
-                    env::current_dir()?,
+                    working_directory.path(),
                     args.values_of_lossy("ARGS").unwrap_or_default(),
                     archive,
                 )?;
