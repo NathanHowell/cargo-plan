@@ -12,7 +12,7 @@ cargo_metadata = "0.12.2"
 clap = { version = "3.0.0-beta.2", default-features = false, features = ["cargo", "std", "suggestions"] }
 pathdiff = "0.2.0"
 tar = "0.4.30"
-tempfile = "3.1.0"
+tempfile = "3.2.0"
 
 [build-dependencies]
 vergen = "3.1.0"
