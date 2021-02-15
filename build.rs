@@ -1,7 +1,7 @@
 use std::error::Error;
-use vergen::{generate_cargo_keys, ConstantsFlags};
+use vergen::{gen, ConstantsFlags};
 
 fn main() -> Result<(), Box<dyn Error>> {
-    generate_cargo_keys(ConstantsFlags::SHA)?;
+    gen(ConstantsFlags::SHA)?;
     Ok(())
 }

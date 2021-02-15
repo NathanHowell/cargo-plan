@@ -384,7 +384,7 @@ fn expand_template<'a>(template: &'a str, install: &'a str, copy: &'a str) -> St
 fn install_cmd() -> &'static str {
     concat!(
         "RUN cargo install --git https://github.com/NathanHowell/cargo-plan --rev ",
-        env!("VERGEN_SHA"),
+        env!("VERGEN_GIT_SHA"),
     )
 }
 
