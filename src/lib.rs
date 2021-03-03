@@ -180,7 +180,7 @@ fn metadata_entries(metadata: Metadata) -> Result<Vec<Entry>, Error> {
     // so we will dedupe with a set
     let mut paths = HashSet::<PathBuf>::new();
     for path in &["./Cargo.toml", "./Cargo.lock"] {
-        let path = root.join(path);
+        let path = root.join_os(path);
         if path.exists() {
             paths.insert(path);
         }
@@ -188,7 +188,7 @@ fn metadata_entries(metadata: Metadata) -> Result<Vec<Entry>, Error> {
 
     let packages = workspace_packages(&metadata);
     for package in &packages {
-        paths.insert(package.manifest_path.to_path_buf());
+        paths.insert(package.manifest_path.to_path_buf().into());
     }
 
     let mut entries = Vec::new();
@@ -306,7 +306,7 @@ pub fn build<P: Into<PathBuf>, R: Read + Seek>(
     // or set the build.target-dir config somewhere, if not we will need to do this
     let current_dir = env::current_dir()?;
     let target_dir = if let Some(target_dir) = target_dir {
-        target_dir
+        target_dir.into()
     } else if let Ok(suffix) = metadata.target_directory.strip_prefix(&path) {
         current_dir.join(suffix)
     } else {
