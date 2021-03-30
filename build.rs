@@ -1,7 +1,7 @@
 use std::error::Error;
-use vergen::{gen, ConstantsFlags};
+use vergen::{vergen, Config};
 
 fn main() -> Result<(), Box<dyn Error>> {
-    gen(ConstantsFlags::SHA)?;
+    vergen(Config::default())?;
     Ok(())
 }
