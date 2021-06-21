@@ -15,4 +15,4 @@ tar = "0.4.35"
 tempfile = "3.2.0"
 
 [build-dependencies]
-vergen = "5.1.8"
+vergen = "5.1.9"
