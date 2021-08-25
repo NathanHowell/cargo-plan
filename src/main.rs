@@ -18,7 +18,7 @@ fn run_app() -> Result<(), Box<dyn Error>> {
         .takes_value(true)
         .default_value("cargo-plan.tar");
     let trailing_args = Arg::new("ARGS")
-        .multiple(true)
+        .multiple_values(true)
         .last(true)
         .about("Additional arguments to pass to cargo");
     let matches = app(crate_name!())
