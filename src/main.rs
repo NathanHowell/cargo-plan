@@ -20,7 +20,7 @@ fn run_app() -> Result<(), Box<dyn Error>> {
     let trailing_args = Arg::new("ARGS")
         .multiple_values(true)
         .last(true)
-        .about("Additional arguments to pass to cargo");
+        .help("Additional arguments to pass to cargo");
     let matches = app(crate_name!())
         .about(crate_description!())
         .bin_name("cargo")
