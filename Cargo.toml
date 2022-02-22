@@ -9,7 +9,7 @@ repository = "https://github.com/NathanHowell/cargo-plan"
 
 [dependencies]
 cargo_metadata = "0.14.1"
-clap = { version = "3.0.14", default-features = false, features = ["cargo", "std", "suggestions"] }
+clap = { version = "3.1.0", default-features = false, features = ["cargo", "std", "suggestions"] }
 pathdiff = "0.2.0"
 tar = "0.4.38"
 tempfile = "3.3.0"
