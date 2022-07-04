@@ -1,4 +1,4 @@
-FROM rust:1-slim-buster@sha256:8d62e1d7297dd208aea3e16c4d1db8691d34c4f6c000a7969620b5aec6d1d3e9 AS base
+FROM rust:1-slim-buster@sha256:820f45fa09d92305b9b7262d685ebd43582edf7797dc228a9810bdfe6addacd4 AS base
 WORKDIR app
 ### __BEGIN_install
 RUN cargo install --git https://github.com/NathanHowell/cargo-plan --branch master
