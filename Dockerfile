@@ -14,7 +14,7 @@ RUN cargo plan build -- --release --frozen
 COPY . .
 RUN cargo build --release --bins --frozen
 
-FROM debian:buster-slim@sha256:cd0a14fb400adf6bcb8c97d25062b71d82d3299a9861aae13ac006708dbc68a5
+FROM debian:buster-slim@sha256:7cd178f900adf3fe5659861895c9690750df784ca96839fa756c379af645747d
 WORKDIR app
 ### __BEGIN_copy
 COPY --from=builder /app/target/release ./
