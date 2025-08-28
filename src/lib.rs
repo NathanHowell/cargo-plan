@@ -67,7 +67,7 @@ impl From<cargo_metadata::Error> for Error {
 
 #[derive(Debug)]
 pub(crate) struct Entry {
-    pub header: tar::Header,
+    pub header: Header,
     pub data: Vec<u8>,
 }
 
@@ -181,7 +181,7 @@ fn metadata_entries(metadata: Metadata) -> Result<Vec<Entry>, Error> {
     // start with the root Cargo.toml, this may optionally show up in workspace_packages too
     // so we will dedupe with a set
     let mut paths = HashSet::<PathBuf>::new();
-    for path in &["./Cargo.toml", "./Cargo.lock"] {
+    for &path in &["./Cargo.toml", "./Cargo.lock", ".cargo/config.toml"] {
         let path = root.join_os(path);
         if path.exists() {
             paths.insert(path);
