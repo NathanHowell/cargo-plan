@@ -10,7 +10,7 @@ COPY --parents **/lib.rs **/main.rs **/Cargo.toml Cargo.lock ./
 RUN cargo plan create -- --all-features --locked
 
 FROM base AS builder
-COPY --from=planner /app/cargo-plan.tar cargo-plan.tar
+COPY --from=planner --link /app/cargo-plan.tar cargo-plan.tar
 RUN cargo plan build -- --release --frozen
 COPY . .
 RUN cargo build --release --bins --frozen
@@ -18,5 +18,5 @@ RUN cargo build --release --bins --frozen
 FROM debian:trixie-slim@sha256:c85a2732e97694ea77237c61304b3bb410e0e961dd6ee945997a06c788c545bb
 WORKDIR app
 ### __BEGIN_copy
-COPY --from=builder /app/target/release ./
+COPY --from=builder --link /app/target/release ./
 ### __END_copy
