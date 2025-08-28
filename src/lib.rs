@@ -115,7 +115,7 @@ impl Entry {
         header.set_path(diff_path(path, base_path)?)?;
         header.set_size(metadata.len());
         header.set_cksum();
-        let mut data = Vec::with_capacity(metadata.len().try_into().unwrap());
+        let mut data = Vec::with_capacity(metadata.len().try_into().unwrap_or(0));
         file.read_to_end(&mut data)?;
         Ok(Entry { header, data })
     }
@@ -125,7 +125,7 @@ impl Entry {
         let mut header = default_header();
         let data = data.into();
         header.set_path(path)?;
-        header.set_size(data.len().try_into().unwrap());
+        header.set_size(data.len().try_into().unwrap_or(0));
         header.set_cksum();
         Ok(Entry { header, data })
     }
@@ -195,12 +195,12 @@ fn metadata_entries(metadata: Metadata) -> Result<Vec<Entry>, Error> {
 
     let mut entries = Vec::new();
     for path in paths {
-        entries.push(Entry::from_path(&root, path)?);
+        entries.push(Entry::from_path(root, path)?);
     }
 
     for package in packages {
         for target in &package.targets {
-            entries.push(Entry::from_target(&root, target.clone())?);
+            entries.push(Entry::from_target(root, target.clone())?);
         }
     }
 
@@ -252,6 +252,7 @@ pub fn unpack<P: Into<PathBuf>, R: Read + Seek>(dir: P, source: R) -> Result<R, 
     Ok(recipe.into_inner())
 }
 
+#[allow(dead_code)]
 fn packages_to_build(metadata: &Metadata, workspace_relative_path: &Path) -> Vec<String> {
     // build up a lookup table for dependencies
     let resolved = metadata
@@ -401,7 +402,7 @@ fn copy_cmd(packages: &[&Package]) -> String {
             }
         })
         .collect::<Vec<_>>();
-    let entrypoint = targets.get(0);
+    let entrypoint = targets.first();
     let ambiguous = targets.len() > 1;
     let targets = format!(
         "COPY --from=builder [{}, \"./\"]",

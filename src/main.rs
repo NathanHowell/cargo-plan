@@ -1,4 +1,4 @@
-mod lib;
+use cargo_plan as lib;
 use clap::{crate_authors, crate_description, crate_name, crate_version, Arg, Command};
 use std::error::Error;
 use std::fs::File;
@@ -92,9 +92,13 @@ fn run_app() -> Result<(), Box<dyn Error>> {
                 let archive = BufWriter::new(archive);
                 lib::generate_dockerfile(env::current_dir()?, archive)?;
             }
-            _ => panic!(),
+            _ => {
+                return Err("Invalid subcommand for plan".into());
+            }
         },
-        _ => panic!(),
+        _ => {
+            return Err("Invalid command".into());
+        }
     }
 
     Ok(())
