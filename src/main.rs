@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::{stdout, BufReader, BufWriter, Write};
 use std::{env, fs};
 
-fn app(name: &'static str) -> App {
+fn app(name: &'_ str) -> App<'_> {
     App::new(name)
         .version(crate_version!())
         .author(crate_authors!())

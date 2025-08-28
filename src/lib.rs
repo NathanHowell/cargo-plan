@@ -1,4 +1,4 @@
-use cargo_metadata::{Metadata, MetadataCommand, Package, PackageId, Target};
+use cargo_metadata::{CrateType, Metadata, MetadataCommand, Package, PackageId, Target};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::convert::TryInto;
 use std::env;
@@ -15,7 +15,7 @@ pub enum Error {
     FileExistsError(PathBuf),
 
     UnknownCrateTypeError {
-        crate_type: Vec<String>,
+        crate_type: Vec<CrateType>,
         name: String,
     },
 
@@ -87,10 +87,16 @@ fn diff_path<P: AsRef<Path>, B: AsRef<Path>>(path: P, base: B) -> Result<PathBuf
 }
 
 impl Entry {
-    const LIB_TYPES: &'static [&'static str] =
-        &["lib", "rlib", "dylib", "cdylib", "staticlib", "proc-macro"];
+    const LIB_TYPES: &'static [&'static CrateType] = &[
+        &CrateType::Lib,
+        &CrateType::RLib,
+        &CrateType::DyLib,
+        &CrateType::CDyLib,
+        &CrateType::StaticLib,
+        &CrateType::ProcMacro,
+    ];
 
-    const BIN_TYPE: &'static str = "bin";
+    const BIN_TYPE: &'static CrateType = &CrateType::Bin;
 
     fn from_path<B: AsRef<Path>, P: Into<PathBuf>>(base_path: B, path: P) -> Result<Self, Error> {
         let path = path.into();
@@ -131,11 +137,7 @@ impl Entry {
         let target = target.into();
         let path = diff_path(&target.src_path, base_path)?;
         let name = target.name.clone();
-        let types = target
-            .crate_types
-            .iter()
-            .map(|k| k.as_str())
-            .collect::<HashSet<&str>>();
+        let types = target.crate_types.iter().collect::<HashSet<_>>();
         if types.contains(Self::BIN_TYPE) {
             Entry::from_bytes(path, b"fn main() {}".to_vec())
         } else if types.contains_any(Self::LIB_TYPES) {
@@ -291,16 +293,14 @@ pub fn build<P: Into<PathBuf>, R: Read + Seek>(
 
     // if this is being run in an existing workspace we need to capture the target directory
     // and propagate this to other commands via environment variable
-    let (target_dir, workspace_root) = cargo_metadata::MetadataCommand::new()
+    let (target_dir, workspace_root) = MetadataCommand::new()
         .exec()
         .map(|metadata| (metadata.target_directory, metadata.workspace_root))
         .ok()
         .map_or((None, None), |(x, y)| (Some(x), Some(y)));
 
     let source = unpack(path.clone(), source)?;
-    let metadata = cargo_metadata::MetadataCommand::new()
-        .current_dir(path.clone())
-        .exec()?;
+    let metadata = MetadataCommand::new().current_dir(path.clone()).exec()?;
 
     // check to see if the user has overridden the CARGO_TARGET_DIR environment variable
     // or set the build.target-dir config somewhere, if not we will need to do this
@@ -394,7 +394,7 @@ fn copy_cmd(packages: &[&Package]) -> String {
         .iter()
         .flat_map(|p| &p.targets)
         .filter_map(|t| {
-            if t.crate_types.contains(&"bin".to_string()) {
+            if t.crate_types.contains(Entry::BIN_TYPE) {
                 Some(base_path.join(&t.name))
             } else {
                 None
