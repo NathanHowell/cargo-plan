@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7-labs
 FROM rust:1-slim-trixie@sha256:26318aeddc7e7335b55ab32f943ec2d400bcc024649f8dbdee569bfa85f0c11d AS base
 WORKDIR app
 ### __BEGIN_install
@@ -5,7 +6,7 @@ RUN cargo install --git https://github.com/NathanHowell/cargo-plan --branch mast
 ### __END_install
 
 FROM base AS planner
-COPY . .
+COPY --parents **/lib.rs **/main.rs **/Cargo.toml Cargo.lock ./
 RUN cargo plan create -- --all-features --locked
 
 FROM base AS builder
