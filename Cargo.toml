@@ -15,5 +15,5 @@ tar = "0.4.44"
 tempfile = "3.22.0"
 
 [build-dependencies]
-anyhow = "1.0.99"
+anyhow = "1.0.100"
 vergen-git2 = { version = "1.0.0", features = ["build", "cargo", "rustc", "si"] }
