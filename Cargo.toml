@@ -8,7 +8,7 @@ license = "MIT"
 repository = "https://github.com/NathanHowell/cargo-plan"
 
 [dependencies]
-cargo_metadata = "0.22.0"
+cargo_metadata = "0.23.0"
 clap = { version = "4.5.48", default-features = false, features = ["cargo", "std", "suggestions"] }
 pathdiff = "0.2.3"
 tar = "0.4.44"
