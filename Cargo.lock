@@ -43,7 +43,7 @@ name = "cargo-plan"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "cargo_metadata 0.23.0",
+ "cargo_metadata 0.23.1",
  "clap",
  "pathdiff",
  "tar",
@@ -85,9 +85,9 @@ dependencies = [
 
 [[package]]
 name = "cargo_metadata"
-version = "0.23.0"
+version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "981a6f317983eec002839b90fae7411a85621410ae591a9cab2ecf5cb5744873"
+checksum = "ef987d17b0a113becdd19d3d0022d04d7ef41f9efe4f3fb63ac44ba61df3ade9"
 dependencies = [
  "camino",
  "cargo-platform 0.3.0",
