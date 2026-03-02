@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7-labs
-FROM rust:1-slim-trixie@sha256:9663b80a1621253d30b146454f903de48f0af925c967be48c84745537cd35d8b AS base
+FROM rust:1-slim-trixie@sha256:c0a38f5662afdb298898da1d70b909af4bda4e0acff2dc52aea6360a9b9c6956 AS base
 WORKDIR app
 ### __BEGIN_install
 RUN cargo install --git https://github.com/NathanHowell/cargo-plan --branch master
